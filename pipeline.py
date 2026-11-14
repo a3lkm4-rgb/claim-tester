@@ -1,4 +1,4 @@
-"""The Hypothesis Tester pipeline.
+"""The Claim Tester pipeline.
 
 claim -> split (Opus) -> for each sub-hypothesis:
             skim (Telem search) -> drop repeats (embeddings) -> score (Haiku)
@@ -138,7 +138,7 @@ def skim(sub):
     resp = telem().search([sub.query_for, sub.query_against], num_results=NUM_RESULTS,
                           tier="default", providers_include=providers or None,
                           auto_routing=routing,
-                          metadata={"app": "hypothesis-tester", "step": "skim"})  # shows in Telem's dashboard
+                          metadata={"app": "claim-tester", "step": "skim"})  # shows in Telem's dashboard
     return resp.results  # titles + short summaries only; no pages opened yet
 
 

@@ -1,7 +1,7 @@
 """The true-or-false test.
 
 Runs every claim in claims.json (each has a known answer) through:
-  - the Hypothesis Tester, and
+  - the Claim Tester, and
   - a plain "search + chatbot": search the claim as typed, read the top 5 pages in full,
     ask Opus whether it is true.
 Saves results.csv and bench_results.json, and prints a summary.
@@ -34,7 +34,7 @@ def chatbot(claim):
     meter, t0 = Meter(), time.time()
     results = telem().search(claim, num_results=NUM_RESULTS, tier="default",
                              auto_routing="accuracy",
-                             metadata={"app": "hypothesis-tester", "step": "chatbot-baseline"}).results
+                             metadata={"app": "claim-tester", "step": "chatbot-baseline"}).results
     urls = list(dict.fromkeys(r.url for r in results))[:CHATBOT_PAGES]
     pages = read(urls, {})
     sources = "\n\n".join(f"[{i}] {u}\n{text}" for i, (u, text) in enumerate(pages.items(), 1))
@@ -73,11 +73,11 @@ for item in json.load(open("claims.json", encoding="utf-8")):
                         "sharper_claim": rep.sharper_claim,
                         "subs": [{"statement": f["sub"].statement, "verdict": sv.verdict}
                                  for f, sv in zip(r["found"], rep.subs)]})
-        print(f"  Hypothesis Tester: {rep.overall_verdict} ({'correct' if row['tester_correct'] else 'WRONG'})"
+        print(f"  Claim Tester: {rep.overall_verdict} ({'correct' if row['tester_correct'] else 'WRONG'})"
               f"  {s['input_tokens']:,} tokens, ${s['total_cost']:.3f}, {r['seconds']:.0f}s")
     except Exception as e:
         row["tester_verdict"] = f"failed: {type(e).__name__}: {str(e)[:120]}"
-        print("  Hypothesis Tester FAILED:", row["tester_verdict"])
+        print("  Claim Tester FAILED:", row["tester_verdict"])
     try:
         c = chatbot(claim)
         row.update(chatbot_verdict=c["verdict"], chatbot_correct=correct(c["verdict"], answer),
@@ -100,7 +100,7 @@ for item in json.load(open("claims.json", encoding="utf-8")):
 
 done = [r for r in rows if "tester_tokens" in r]
 print("\n================ SUMMARY ================")
-for name, key in (("Hypothesis Tester", "tester_correct"), ("Search + chatbot", "chatbot_correct")):
+for name, key in (("Claim Tester", "tester_correct"), ("Search + chatbot", "chatbot_correct")):
     scored = [r for r in rows if key in r]
     for answer in ("true", "false"):
         group = [r for r in scored if r["answer"] == answer]

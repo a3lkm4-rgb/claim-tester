@@ -32,7 +32,7 @@ s, b = r["smart"], r["baseline"]
 print(f"\nSCOREBOARD ({r['seconds']:.0f} seconds)")
 print(f"  Read everything:   {b['pages']:>3} pages  {b['input_tokens']:>9,} tokens ({b['how']})  "
       f"${b['input_cost']:.3f} reading cost")
-print(f"  Hypothesis Tester: {s['pages']:>3} pages  {s['input_tokens']:>9,} tokens (measured)  "
+print(f"  Claim Tester: {s['pages']:>3} pages  {s['input_tokens']:>9,} tokens (measured)  "
       f"${s['input_cost']:.3f} reading cost   (total ${s['total_cost']:.3f})")
 if b["input_tokens"]:
     print(f"  Tokens saved: {1 - s['input_tokens'] / b['input_tokens']:.0%}   "

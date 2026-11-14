@@ -1,7 +1,7 @@
 # Devpost submission (paste each part into the matching field)
 
 ## Project name
-Hypothesis Tester
+Claim Tester
 
 ## Tagline (the one line under the name)
 The audit layer for business claims: it searches for the evidence against you, reads only what matters, and checks its own quotes.
@@ -21,7 +21,7 @@ python, telem, tavily, claude, anthropic, qdrant, fastembed, onnx, streamlit
 Every investment memo and strategy deck is a stack of claims: the market is growing, customers are loyal, a competitor is weak. In consulting work, the dangerous part is that you search for evidence and mostly find what agrees with you. Search tools and chatbots make this worse, because they answer the question as you asked it. I wanted a tool whose job is to argue back.
 
 ## What it does
-Paste a memo or type a claim, such as "Peloton's revenue has grown every year since 2021". Hypothesis Tester:
+Paste a memo or type a claim, such as "Peloton's revenue has grown every year since 2021". Claim Tester:
 
 1. **Breaks the claim down** into three assumptions that would have to be true.
 2. **Searches both sides.** For each assumption it looks for evidence for and against.
@@ -32,7 +32,7 @@ Paste a memo or type a claim, such as "Peloton's revenue has grown every year si
 Starting from a memo, it produces a **red-flag report**: which of the memo's key claims hold, and which do not.
 
 ## Results
-On six claims with known answers, Hypothesis Tester judged **5 of 6** correctly; a plain "search + chatbot" baseline judged 4 of 6. It used **90% fewer tokens** than opening every search result in full, at about **$0.15 and one minute per claim**. In three further runs, **40 of 40** quoted findings were verified against their sources. Six claims is a small sample, and the full results, including the miss, are in the repository.
+On six claims with known answers, Claim Tester judged **5 of 6** correctly; a plain "search + chatbot" baseline judged 4 of 6. It used **90% fewer tokens** than opening every search result in full, at about **$0.15 and one minute per claim**. In three further runs, **40 of 40** quoted findings were verified against their sources. Six claims is a small sample, and the full results, including the miss, are in the repository.
 
 ## How I built it
 - **Telem** does the skim. One request searches several engines with auto-routing, for and against at once, and returns only titles and summaries. Its fetch is the backup page reader, and every call is tagged for Telem's dashboard.
@@ -82,7 +82,7 @@ Before the event: brainstorming and planning (recorded in DECISIONS.md), an expl
 | 1:10 | Under the hood tab | "Telem skims several search engines at once. Tavily reads only the relevant passages of the best few pages. A vector database remembers what's been read." |
 | 1:30 | Cost and method tab | "It used 90% fewer tokens than reading everything it found, for about fifteen cents a claim." |
 | 1:40 | Results table in the README | "On six claims with known answers, it got five right. A search chatbot got four." |
-| 1:50 | Title | "Hypothesis Tester: the audit layer for business claims." |
+| 1:50 | Title | "Claim Tester: the audit layer for business claims." |
 
 Tip: run the memo test before recording, since it takes about two minutes. Record the result, not the wait.
 

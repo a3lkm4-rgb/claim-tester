@@ -131,7 +131,7 @@ def evidence_map(r):
 def memo(r):
     """The whole result as a markdown memo the consultant can download."""
     rep, src = r["report"], {e["n"]: e for f in r["found"] for e in f["evidence"]}
-    out = [f"# Hypothesis test: {r['claim']}", f"*{date.today():%d %B %Y}*", "",
+    out = [f"# Claim test: {r['claim']}", f"*{date.today():%d %B %Y}*", "",
            "## Executive summary",
            f"**Verdict: {rep.overall_verdict}** (confidence: {rep.confidence})", "", rep.summary, "",
            f"**Refined hypothesis:** {rep.sharper_claim}", "",
@@ -172,7 +172,7 @@ def save_to_library(r):
 
 # ------------------------------------------------------------------ page
 
-st.set_page_config(page_title="Hypothesis Tester", layout="wide")
+st.set_page_config(page_title="Claim Tester", layout="wide")
 st.markdown(CSS, unsafe_allow_html=True)
 
 with st.sidebar:
@@ -199,7 +199,7 @@ with st.sidebar:
         "Slower and costs more. Opens every search result in full and asks for a second "
         "verdict, so you can compare quality."))
 
-st.markdown('<p class="brand">Hypothesis Tester</p>'
+st.markdown('<p class="brand">Claim Tester</p>'
             '<p class="tagline">Pressure-test a business claim: evidence for and against, '
             'reading only what matters.</p>', unsafe_allow_html=True)
 
@@ -288,7 +288,7 @@ with st.container(border=True):
     left.write(rep.strongest_case_against)
     right.markdown('<div class="eyebrow">What would change our view</div>', unsafe_allow_html=True)
     right.write(rep.would_change_verdict)
-    st.download_button("Download memo", memo(r), file_name="hypothesis-test-memo.md")
+    st.download_button("Download memo", memo(r), file_name="claim-test-memo.md")
 
 # ---- headline numbers
 checked = [c for sub_checks in r["checks"] for c in sub_checks]
@@ -364,7 +364,7 @@ with tab_cost:
         {"Approach": "Read everything", "Pages read in full": base["pages"],
          "Tokens read by AI": f"{base['input_tokens']:,} ({base['how']})",
          "Reading cost": f"${base['input_cost']:.3f}"},
-        {"Approach": "Hypothesis Tester", "Pages read in full": smart["pages"],
+        {"Approach": "Claim Tester", "Pages read in full": smart["pages"],
          "Tokens read by AI": f"{smart['input_tokens']:,} (measured)",
          "Reading cost": f"${smart['input_cost']:.3f}"}])
     if base["input_cost"]:
@@ -376,10 +376,10 @@ with tab_cost:
                "without running it; 'measured' means it was run.")
     if base["report"]:
         st.markdown("#### Quality check against reading everything")
-        st.table([{"Assumption": f["sub"].statement, "Hypothesis Tester": sv.verdict,
+        st.table([{"Assumption": f["sub"].statement, "Claim Tester": sv.verdict,
                    "Read everything": bv.verdict}
                   for f, sv, bv in zip(r["found"], rep.subs, base["report"].subs)]
-                 + [{"Assumption": "Overall", "Hypothesis Tester": rep.overall_verdict,
+                 + [{"Assumption": "Overall", "Claim Tester": rep.overall_verdict,
                      "Read everything": base["report"].overall_verdict}])
     with st.expander("Audit trail: what was searched, dropped and read"):
         for i, f in enumerate(r["found"], 1):

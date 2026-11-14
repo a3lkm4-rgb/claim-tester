@@ -1,8 +1,8 @@
-# Hypothesis Tester
+# Claim Tester
 
 **Pressure-test a business claim in about a minute: evidence for and against, reading only what matters.**
 
-Consultants and analysts start with a hypothesis ("Notion is losing small-business customers"). The risk is finding only the evidence that agrees with it. Search tools and chatbots answer the question as asked. Hypothesis Tester tries to disprove it.
+Consultants and analysts start with a hypothesis ("Notion is losing small-business customers"). The risk is finding only the evidence that agrees with it. Search tools and chatbots answer the question as asked. Claim Tester tries to disprove it.
 
 ## What it does
 
@@ -68,9 +68,9 @@ The rest of the stack:
 
 ## Results
 
-See [results.csv](results.csv) and [bench_results.json](bench_results.json) for the true-or-false test: six claims with known answers, run through Hypothesis Tester and through a plain "search + chatbot" baseline.
+See [results.csv](results.csv) and [bench_results.json](bench_results.json) for the true-or-false test: six claims with known answers, run through Claim Tester and through a plain "search + chatbot" baseline.
 
-| Claim | Known answer | Hypothesis Tester | Search + chatbot |
+| Claim | Known answer | Claim Tester | Search + chatbot |
 |---|---|---|---|
 | AWS is the largest cloud infrastructure provider by market share | True | Supported ✓ | Supported ✓ |
 | Nvidia's data center business generates most of its revenue | True | Supported ✓ | Not enough evidence ✗ |
@@ -82,7 +82,7 @@ See [results.csv](results.csv) and [bench_results.json](bench_results.json) for 
 
 Measured on 14 November 2026, one run per claim:
 
-- **Against reading everything:** opening every search result in full would have used 10 times the tokens. Hypothesis Tester used 90% fewer tokens and 95% less reading cost.
+- **Against reading everything:** opening every search result in full would have used 10 times the tokens. Claim Tester used 90% fewer tokens and 95% less reading cost.
 - **Cost and time:** $0.15 and 72 seconds per claim on average.
 - **Against the chatbot baseline:** the chatbot reads only 5 pages, so it is quicker and slightly cheaper overall ($0.78 against $0.91 for the six claims). It was also less accurate, and it gives one answer with no evidence against.
 
