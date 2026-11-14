@@ -219,6 +219,13 @@ with st.sidebar:
     run_baseline = st.checkbox("Also run the read-everything version", help=(
         "Slower and costs more. Opens every search result in full and asks for a second "
         "verdict, so you can compare quality."))
+    try:
+        import psutil
+        used = psutil.Process().memory_info().rss / 1e6
+        st.caption(f"Memory in use: {used:,.0f} MB"
+                   + (" (high: reboot the app before a demo)" if used > 800 else ""))
+    except Exception:
+        pass
 
 st.markdown('<p class="brand">Claim Tester</p>'
             '<p class="tagline">Pressure-test a business claim: evidence for and against, '
