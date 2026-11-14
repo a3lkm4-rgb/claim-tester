@@ -1,4 +1,9 @@
 """The page.  Run:  streamlit run app.py"""
+import json
+import textwrap
+from datetime import date
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -33,6 +38,55 @@ def memo(r):
     return "\n".join(out)
 
 
+FILL = {"supported": "#c8e6c9", "partly supported": "#ffe0b2", "contested": "#ffe0b2",
+        "not supported": "#ffcdd2", "not enough evidence": "#e0e0e0",
+        "supports": "#c8e6c9", "contradicts": "#ffcdd2", "neutral": "#e0e0e0"}
+
+
+def label(text, width=34, limit=110):
+    """Shorten and wrap text so it fits in a box on the map."""
+    text = textwrap.shorten(text, limit, placeholder="…").replace('"', "'")
+    return "\\n".join(textwrap.wrap(text, width))
+
+
+def evidence_map(r):
+    """The argument as a picture: claim -> sub-hypotheses -> the sources read for each.
+    Green = supports, red = contradicts, grey = neutral."""
+    dot = ['digraph {', 'rankdir=LR; bgcolor="transparent";',
+           'node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11, '
+           'fontcolor="black"]; edge [color="#888888"];',
+           f'claim [label="{label(r["claim"])}", fillcolor="#c5cae9", fontsize=13];']
+    for i, (f, sv) in enumerate(zip(r["found"], r["report"].subs), 1):
+        dot.append(f's{i} [label="{i}. {label(f["sub"].statement)}\\n{sv.verdict.upper()}", '
+                   f'fillcolor="{FILL[sv.verdict]}"];')
+        dot.append(f'claim -> s{i};')
+        for e in f["evidence"]:
+            dot.append(f'e{e["n"]} [label="[{e["n"]}] {label(e["title"], 30, 60)}\\n({e["source_type"]})", '
+                       f'fillcolor="{FILL[e["stance"]]}", fontsize=10];')
+            dot.append(f's{i} -> e{e["n"]};')
+    return "\n".join(dot + ["}"])
+
+
+LIBRARY = Path(__file__).parent / "library.json"
+
+
+def load_library():
+    try:
+        return json.loads(LIBRARY.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def save_to_library(r):
+    """Keep every tested claim, so a firm builds up its own evidence library."""
+    entries = [e for e in load_library() if e["claim"] != r["claim"]]
+    entries.append({"date": date.today().isoformat(), "claim": r["claim"],
+                    "verdict": r["report"].overall_verdict, "confidence": r["report"].confidence,
+                    "sharper_claim": r["report"].sharper_claim,
+                    "sources": [e["url"] for f in r["found"] for e in f["evidence"]]})
+    LIBRARY.write_text(json.dumps(entries, indent=2), encoding="utf-8")
+
+
 st.set_page_config(page_title="Hypothesis Tester", layout="wide")
 st.title("Hypothesis Tester")
 st.caption("Pressure-test a business claim: evidence for and against, reading only what matters.")
@@ -44,6 +98,7 @@ run_baseline = st.checkbox("Also run the read-everything version (slower, costs 
 if st.button("Test this claim", type="primary") and claim:
     with st.status("Working...", expanded=True) as box:
         st.session_state["result"] = run(claim, run_baseline, status=box.write)
+        save_to_library(st.session_state["result"])
         box.update(label="Done", state="complete", expanded=False)
 
 r = st.session_state.get("result")
@@ -59,6 +114,11 @@ if r:
                "For": sum(x.stance == "supports" for x in sv.findings),
                "Against": sum(x.stance == "contradicts" for x in sv.findings)}
               for f, sv in zip(r["found"], rep.subs)])
+
+    st.subheader("Evidence map")
+    st.caption("Each box on the right is a source that was read. "
+               "Green supports, red contradicts, grey is neutral.")
+    st.graphviz_chart(evidence_map(r), width="stretch")
 
     for i, (f, sv) in enumerate(zip(r["found"], rep.subs), 1):
         with st.expander(f"{i}. {f['sub'].statement}  —  {sv.verdict}"):
@@ -123,3 +183,11 @@ if r:
         for i, f in enumerate(r["found"], 1):
             st.markdown(f"**Sub-hypothesis {i}**\n\n" + "\n".join(f["log"]))
         st.table(r["meter"].calls)
+
+library = load_library()
+if library:
+    with st.expander(f"Claim library: {len(library)} claims tested so far"):
+        st.dataframe([{"Date": e["date"], "Claim": e["claim"], "Verdict": e["verdict"],
+                       "Confidence": e["confidence"], "Sharper claim": e["sharper_claim"],
+                       "Sources": len(e["sources"])} for e in reversed(library)],
+                     hide_index=True)

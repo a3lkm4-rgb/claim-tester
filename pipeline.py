@@ -2,7 +2,7 @@
 
 claim -> split (Opus) -> for each sub-hypothesis:
             skim (Telem search) -> drop repeats (embeddings) -> score (Haiku)
-            -> read the top 3 (Tavily) -> trim (Haiku)
+            -> read the relevant passages of the top 3 (Tavily)
       -> verdict (Opus) -> compare tokens with reading everything
 """
 import os
@@ -27,6 +27,7 @@ DUP_THRESHOLD = 0.90     # summaries this similar count as the same story
                          # (0.83 was too strict on real results: it dropped different articles)
 MAX_PARAGRAPHS = 40      # longer pages are pre-filtered by embeddings before Haiku
 MAX_KEPT = 12            # most paragraphs kept from any one page
+CHUNKS = 5               # relevant passages Tavily returns per page (its maximum)
 BASELINE_MAX_PAGES = 30  # cap on the read-everything comparison
 
 SOURCE_TYPES = ["official data", "independent research", "news", "user opinion", "vendor marketing"]
@@ -86,7 +87,8 @@ def skim(sub):
     routing = None if os.getenv("TELEM_AUTO_ROUTING", "").lower() == "off" else "accuracy"
     resp = telem().search([sub.query_for, sub.query_against], num_results=NUM_RESULTS,
                           tier="default", providers_include=providers or None,
-                          auto_routing=routing)
+                          auto_routing=routing,
+                          metadata={"app": "hypothesis-tester", "step": "skim"})  # shows in Telem's dashboard
     return resp.results  # titles + short summaries only; no pages opened yet
 
 
@@ -206,7 +208,17 @@ def read(urls, cache):
     return {u: cache[u] for u in urls if u in cache}
 
 
-# ---------- Step 6: keep only the paragraphs with evidence (embeddings, then Haiku) ----------
+def read_relevant(urls, hypothesis):
+    """Tavily opens each page and returns only the passages relevant to the hypothesis,
+    so the AI never sees the rest of the page. Returns url -> passages."""
+    if not urls:
+        return {}
+    resp = tavily().extract(urls=urls, format="markdown", query=hypothesis,
+                            chunks_per_source=CHUNKS)
+    return {p["url"]: p["raw_content"] for p in resp.get("results", []) if p.get("raw_content")}
+
+
+# ---------- Fallback for pages Tavily cannot open: trim the full page (embeddings, then Haiku) ----------
 
 class Keep(BaseModel):
     keep: list[int]
@@ -247,15 +259,23 @@ def investigate(meter, sub, cache):
     log.insert(1, f"- engines Telem used: {', '.join(engines) or 'not reported'}")
     rated = score(meter, sub, results) if results else []
     candidates = pick(rated)[:TOP_K + SPARE]
-    pages = read([x["url"] for x in candidates], cache)
-    chosen = [x for x in candidates if x["url"] in pages][:TOP_K]
+    urls = [x["url"] for x in candidates]
+    passages = read_relevant(urls, sub.statement)
+    # anything Tavily could not open gets a second try through Telem's fetch
+    backup = read([u for u in urls if u not in passages], cache)
+    chosen = [x for x in candidates if x["url"] in passages or x["url"] in backup][:TOP_K]
     for x in rated:
         x["read"] = x in chosen
-    log += [f"- could not open {x['url']}" for x in candidates if x["url"] not in pages]
+    log += [f"- could not open {u}" for u in urls if u not in passages and u not in backup]
     evidence = []
     for x in chosen:
-        text, total, kept = trim(meter, sub, pages[x["url"]])
-        log.append(f"- read *{x['title']}*: kept {kept} of {total} paragraphs")
+        if x["url"] in passages:
+            text = passages[x["url"]]
+            log.append(f"- read *{x['title']}*: Tavily returned {len(text):,} characters "
+                       f"of relevant passages")
+        else:
+            text, total, kept = trim(meter, sub, backup[x["url"]])
+            log.append(f"- read *{x['title']}* (via Telem): kept {kept} of {total} paragraphs")
         if text:
             evidence.append({**x, "text": text})
     return {"sub": sub, "rated": rated, "evidence": evidence, "log": log}

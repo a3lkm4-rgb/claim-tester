@@ -1,0 +1,8 @@
+[
+  {"claim": "Amazon Web Services is the largest cloud infrastructure provider by market share", "answer": "true"},
+  {"claim": "Nvidia's data center business generates most of its revenue", "answer": "true"},
+  {"claim": "Netflix has grown its paid subscriber base since launching its ad-supported plan in 2022", "answer": "true"},
+  {"claim": "WeWork has never filed for bankruptcy", "answer": "false"},
+  {"claim": "Peloton's revenue has grown every year since 2021", "answer": "false"},
+  {"claim": "US office vacancy rates have fallen since the shift to remote work", "answer": "false"}
+]
