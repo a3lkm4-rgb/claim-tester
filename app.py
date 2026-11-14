@@ -208,8 +208,9 @@ mode_claim, mode_memo = st.tabs(["Test a claim", "Start from a memo"])
 with mode_claim:
     with st.form("test", border=False):
         box, button = st.columns([6, 1], vertical_alignment="bottom")
-        claim = box.text_input("Claim to test", key="claim",
-                               placeholder="e.g. Notion is losing small-business customers")
+        claim = box.text_input("Claim or question to test", key="claim",
+                               placeholder="e.g. Notion is losing small-business customers, "
+                                           "or: Is Notion losing small-business customers?")
         go = button.form_submit_button("Test claim", type="primary", width="stretch")
     if go and claim:
         with st.status("Testing the claim...", expanded=True) as progress:
@@ -257,7 +258,8 @@ if len(results) > 1:
         r = results[shown]
 
 if not r:
-    st.info("Enter a claim above, or pick an example from the sidebar. A test takes about a minute.")
+    st.info("Enter a claim or a question above, or pick an example from the sidebar. "
+            "A test takes about a minute.")
     if library:
         st.markdown("#### Claim library")
         st.dataframe([{"Date": e["date"], "Claim": e["claim"], "Verdict": e["verdict"],
@@ -273,6 +275,9 @@ with st.container(border=True):
     st.markdown(f'<div class="eyebrow">Claim tested</div><div class="claim">{escape(r["claim"])}</div>'
                 f'{pill(rep.overall_verdict)}<span class="conf">Confidence: {rep.confidence}</span>',
                 unsafe_allow_html=True)
+    if r["asked"].strip() != r["claim"].strip():
+        st.caption(f"You asked: “{r['asked']}”. It was restated as the claim above, so that "
+                   f"the assumption behind the question is tested.")
     st.write("")
     st.write(rep.summary)
     st.markdown(f'<div class="eyebrow">Refined hypothesis the evidence supports</div>',

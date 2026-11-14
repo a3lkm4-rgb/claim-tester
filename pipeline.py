@@ -63,12 +63,19 @@ class Sub(BaseModel):
 
 
 class Plan(BaseModel):
+    claim: str       # the input as one testable statement (a question is restated as a claim)
     subs: list[Sub]
 
 
 SPLIT_PROMPT = """You are a strategy consultant pressure-testing a client's claim.
 
-Break the claim into exactly 3 sub-hypotheses that together would settle it. Ask: "what would
+First set `claim`: the input as one testable statement. If the input is already a statement,
+copy it unchanged. If it is a question, restate it as the claim it is asking about, without
+changing its meaning: "Is Notion losing small-business customers?" becomes "Notion is losing
+small-business customers", and "Why are customers leaving Notion?" becomes "Customers are
+leaving Notion", because that assumption has to be tested first.
+
+Then break the claim into exactly 3 sub-hypotheses that together would settle it. Ask: "what would
 have to be true for this claim to hold?" Each must be testable with public web evidence, and
 they must not overlap.
 
@@ -76,11 +83,13 @@ For each one, write two short web search queries, the way a person would type th
 - query_for: looks for evidence that supports the sub-hypothesis
 - query_against: looks for evidence that contradicts it
 
-Claim: {claim}"""
+Input: {claim}"""
 
 
-def split(meter, claim):
-    return ask(meter, "split", SPLIT_PROMPT.format(claim=claim), Plan, model=STRONG).subs[:3]
+def split(meter, asked):
+    """Returns (the claim to test, its 3 sub-hypotheses)."""
+    plan = ask(meter, "split", SPLIT_PROMPT.format(claim=asked), Plan, model=STRONG)
+    return plan.claim, plan.subs[:3]
 
 
 # ---------- Optional first step: pull the testable claims out of a memo (Opus) ----------
@@ -489,7 +498,8 @@ def run(claim, run_baseline=False, status=lambda msg: None, use_memory=True):
     meter, t0, cache, trace = Meter(), time.time(), {}, []
 
     status("Opus is splitting the claim into sub-hypotheses...")
-    subs = split(meter, claim)
+    asked = claim
+    claim, subs = split(meter, asked)  # a question comes back restated as a claim
     trace.append({"step": "Split the claim", "done by": "Claude Opus",
                   "detail": f"{len(subs)} assumptions, {2 * len(subs)} search queries",
                   "seconds": round(time.time() - t0, 1)})
@@ -580,7 +590,7 @@ def run(claim, run_baseline=False, status=lambda msg: None, use_memory=True):
     smart_in = meter.total("input")
     smart_in_cost = sum(c["input"] * PRICES.get(c["model"], PRICES[STRONG])[0] / 1e6
                         for c in meter.calls)
-    return {"claim": claim, "found": found, "report": report, "meter": meter,
+    return {"claim": claim, "asked": asked, "found": found, "report": report, "meter": meter,
             "checks": checks, "trace": trace,
             "seconds": time.time() - t0, "baseline": baseline,
             "smart": {"pages": len({e["url"] for f in found for e in f["evidence"]}),
