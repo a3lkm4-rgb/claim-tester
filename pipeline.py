@@ -7,6 +7,7 @@ claim -> split (Opus) -> for each sub-hypothesis:
 """
 import os
 import re
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
@@ -37,7 +38,8 @@ BASELINE_MAX_PAGES = 30  # cap on the read-everything comparison
 
 SOURCE_TYPES = ["official data", "independent research", "news", "user opinion", "vendor marketing"]
 
-_telem = _tavily = None
+_telem = None
+_local = threading.local()  # one Tavily client per thread: its connection is not safe to share
 
 
 def telem():
@@ -48,10 +50,22 @@ def telem():
 
 
 def tavily():
-    global _tavily
-    if _tavily is None:
-        _tavily = TavilyClient()  # reads TAVILY_API_KEY
-    return _tavily
+    if not hasattr(_local, "tavily"):
+        _local.tavily = TavilyClient()  # reads TAVILY_API_KEY
+    return _local.tavily
+
+
+def _retry(call, attempts=3):
+    """Run a network call; if the connection drops, wait briefly and try again."""
+    for attempt in range(attempts):
+        try:
+            return call()
+        except Exception:
+            if attempt == attempts - 1:
+                raise
+            if hasattr(_local, "tavily"):
+                del _local.tavily  # start the next try on a fresh connection
+            time.sleep(1.5 * (attempt + 1))
 
 
 # ---------- Step 1: split the claim (Opus) ----------
@@ -135,10 +149,10 @@ def skim(sub):
     # Auto-routing: Telem picks the best few engines for each query instead of calling them all.
     # Set TELEM_AUTO_ROUTING=off in .env to compare against searching every default engine.
     routing = None if os.getenv("TELEM_AUTO_ROUTING", "").lower() == "off" else "accuracy"
-    resp = telem().search([sub.query_for, sub.query_against], num_results=NUM_RESULTS,
-                          tier="default", providers_include=providers or None,
-                          auto_routing=routing,
-                          metadata={"app": "claim-tester", "step": "skim"})  # shows in Telem's dashboard
+    resp = _retry(lambda: telem().search(
+        [sub.query_for, sub.query_against], num_results=NUM_RESULTS, tier="default",
+        providers_include=providers or None, auto_routing=routing,
+        metadata={"app": "claim-tester", "step": "skim"}))  # the tag shows in Telem's dashboard
     return resp.results  # titles + short summaries only; no pages opened yet
 
 
@@ -245,7 +259,12 @@ def read(urls, cache):
     """Fill `cache` (url -> page text) for any urls not fetched yet. 20 per Tavily call."""
     todo = [u for u in urls if u not in cache]
     for i in range(0, len(todo), 20):
-        for page in tavily().extract(urls=todo[i:i + 20], format="markdown").get("results", []):
+        batch = todo[i:i + 20]
+        try:
+            pages = _retry(lambda: tavily().extract(urls=batch, format="markdown"))
+        except Exception:
+            continue  # Tavily unreachable for this batch: Telem's fetch below gets a try
+        for page in pages.get("results", []):
             if page.get("raw_content"):
                 cache[page["url"]] = page["raw_content"]
     # pages Tavily could not open get a second try through Telem's fetch (5 per call)
@@ -266,8 +285,11 @@ def read_relevant(urls, hypothesis):
     so the AI never sees the rest of the page. Returns url -> passages."""
     if not urls:
         return {}
-    resp = tavily().extract(urls=urls, format="markdown", query=hypothesis,
-                            chunks_per_source=CHUNKS)
+    try:
+        resp = _retry(lambda: tavily().extract(urls=urls, format="markdown", query=hypothesis,
+                                               chunks_per_source=CHUNKS))
+    except Exception:
+        return {}  # Tavily unreachable: the caller falls back to Telem's fetch
     return {p["url"]: p["raw_content"] for p in resp.get("results", []) if p.get("raw_content")}
 
 
