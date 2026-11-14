@@ -3,3 +3,4 @@
 __pycache__/
 .models/
 library.json
+evidence_db/

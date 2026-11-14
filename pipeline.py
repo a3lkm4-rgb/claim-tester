@@ -6,8 +6,10 @@ claim -> split (Opus) -> for each sub-hypothesis:
       -> verdict (Opus) -> compare tokens with reading everything
 """
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -16,6 +18,7 @@ from pydantic import BaseModel
 from tavily import TavilyClient
 from telem import Telem
 
+import memory
 from embed import embed, similarity_to
 from llm import PRICES, STRONG, Meter, ask, count_tokens
 
@@ -23,6 +26,8 @@ NUM_RESULTS = 5          # results per search engine, per query
 TOP_K = 3                # pages read in full per sub-hypothesis
 MIN_SCORE = 5            # evidence score (0-10) needed to be read
 SPARE = 2                # extra candidates fetched in case a page will not open
+STRONG_SCORE = 7         # a result that offers direct evidence
+                         # fewer than 2 of these and the tool searches again with new queries
 DUP_THRESHOLD = 0.90     # summaries this similar count as the same story
                          # (0.83 was too strict on real results: it dropped different articles)
 MAX_PARAGRAPHS = 40      # longer pages are pre-filtered by embeddings before Haiku
@@ -107,11 +112,11 @@ def extract_claims(meter, memo):
     return ask(meter, "memo", MEMO_PROMPT.format(memo=memo), MemoClaims, model=STRONG).claims[:8]
 
 
-def run_many(claims):
+def run_many(claims, use_memory=True):
     """Test several claims side by side. Returns results in the same order."""
     embed(["warm up"])  # load the embedding model once, before the parallel work starts
     with ThreadPoolExecutor(max_workers=3) as pool:
-        return list(pool.map(run, claims))
+        return list(pool.map(lambda c: run(c, use_memory=use_memory), claims))
 
 
 # ---------- Step 2: skim (Telem searches several engines, both sides in one request) ----------
@@ -206,9 +211,12 @@ def score(meter, sub, results):
               "score": by_id[i].score, "stance": by_id[i].stance,
               "source_type": by_id[i].source_type}
              for i, r in enumerate(results) if i in by_id]
-    # best first; a more trustworthy source type wins a tie
-    rated.sort(key=lambda x: (-x["score"], SOURCE_TYPES.index(x["source_type"])))
-    return rated
+    return sorted(rated, key=_rank)
+
+
+def _rank(x):
+    """Best first; a more trustworthy source type wins a tie."""
+    return (-x["score"], SOURCE_TYPES.index(x["source_type"]))
 
 
 def pick(rated):
@@ -285,27 +293,90 @@ def trim(meter, sub, text):
     return "\n\n".join(kept), total, len(kept)
 
 
+# ---------- Adaptive re-search: if the evidence is thin, try new queries once (Haiku) ----------
+
+class Requery(BaseModel):
+    query_for: str
+    query_against: str
+
+
+REQUERY_PROMPT = """A consultant searched the web to test a hypothesis and found only weak evidence.
+Write two new web search queries of at most 8 words each that come at it from a different angle:
+name a specific metric, data source, report or synonym that the first queries missed.
+- query_for: looks for evidence that supports the hypothesis
+- query_against: looks for evidence that contradicts it
+
+Hypothesis: {hypothesis}
+Queries already tried: "{q1}" and "{q2}"
+Best results so far:
+{titles}"""
+
+
+def search_again(meter, sub, rated, log):
+    """One more search with rewritten queries. Returns the rated list with any new results added."""
+    titles = "\n".join(f"- ({x['score']}/10) {x['title']}" for x in rated[:6]) or "(none)"
+    new = ask(meter, "requery", REQUERY_PROMPT.format(
+        hypothesis=sub.statement, q1=sub.query_for, q2=sub.query_against, titles=titles), Requery)
+    more = skim(Sub(statement=sub.statement, query_for=new.query_for,
+                    query_against=new.query_against))
+    seen = {_address(x["url"]) for x in rated}
+    fresh = [r for r in drop_repeats(more, []) if _address(r.url) not in seen]
+    before = max((x["score"] for x in rated), default=0)
+    if fresh:
+        rated = sorted(rated + score(meter, sub, fresh), key=_rank)
+    log.append(f"- evidence was thin (best score {before}/10), so it searched again with "
+               f"\"{new.query_for}\" and \"{new.query_against}\": {len(fresh)} new results, "
+               f"best score now {max((x['score'] for x in rated), default=0)}/10")
+    return rated, (new.query_for, new.query_against)
+
+
 # ---------- Steps 2-6 for one sub-hypothesis ----------
 
-def investigate(meter, sub, cache):
-    log = []
+def investigate(meter, sub, cache, use_memory=True):
+    t0, log = time.time(), []
+
+    # evidence memory: passages read in earlier tests that are close in meaning to this assumption
+    recalled = {}
+    if use_memory:
+        try:
+            recalled = {m["url"]: m for m in memory.recall(sub.statement)}
+        except Exception as e:
+            log.append(f"- evidence memory unavailable ({type(e).__name__})")
+
     found = skim(sub)
-    results = drop_repeats(found, log)
     engines = sorted({r.provider for r in found if getattr(r, "provider", None)})
+    # recalled passages join the fresh results as candidates and are screened in the same way
+    remembered = [SimpleNamespace(url=m["url"], title=m["title"], summary=m["text"][:400],
+                                  publish_date=None, provider="memory") for m in recalled.values()]
+    results = drop_repeats(remembered + found, log)
     log.insert(1, f"- engines Telem used: {', '.join(engines) or 'not reported'}")
+    if recalled:
+        log.insert(2, f"- recalled {len(recalled)} passages from earlier tests as extra candidates")
+
     rated = score(meter, sub, results) if results else []
+    retry = None
+    if sum(x["score"] >= STRONG_SCORE for x in rated) < 2:
+        rated, retry = search_again(meter, sub, rated, log)
+
     candidates = pick(rated)[:TOP_K + SPARE]
     urls = [x["url"] for x in candidates]
-    passages = read_relevant(urls, sub.statement)
+    to_fetch = [u for u in urls if u not in recalled]
+    passages = read_relevant(to_fetch, sub.statement)
     # anything Tavily could not open gets a second try through Telem's fetch
-    backup = read([u for u in urls if u not in passages], cache)
-    chosen = [x for x in candidates if x["url"] in passages or x["url"] in backup][:TOP_K]
+    backup = read([u for u in to_fetch if u not in passages], cache)
+    chosen = [x for x in candidates
+              if x["url"] in recalled or x["url"] in passages or x["url"] in backup][:TOP_K]
     for x in rated:
         x["read"] = x in chosen
-    log += [f"- could not open {u}" for u in urls if u not in passages and u not in backup]
+        x["memory"] = x["url"] in recalled
+    log += [f"- could not open {u}" for u in to_fetch if u not in passages and u not in backup]
     evidence = []
     for x in chosen:
-        if x["url"] in passages:
+        if x["url"] in recalled:
+            text = recalled[x["url"]]["text"]
+            log.append(f"- reused *{x['title']}* from memory, no fetch needed "
+                       f"(first read when testing \"{recalled[x['url']]['claim']}\")")
+        elif x["url"] in passages:
             text = passages[x["url"]]
             log.append(f"- read *{x['title']}*: Tavily returned {len(text):,} characters "
                        f"of relevant passages")
@@ -314,7 +385,40 @@ def investigate(meter, sub, cache):
             log.append(f"- read *{x['title']}* (via Telem): kept {kept} of {total} paragraphs")
         if text:
             evidence.append({**x, "text": text})
-    return {"sub": sub, "rated": rated, "evidence": evidence, "log": log}
+    return {"sub": sub, "rated": rated, "evidence": evidence, "log": log, "retry": retry,
+            "engines": engines, "seconds": time.time() - t0}
+
+
+# ---------- Quote check: does every quoted finding really appear in its source? (plain code) ----------
+
+def _plain(text):
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def check_quote(quote, source_text):
+    """'verified' = found word for word; 'close match' = found with small differences;
+    'not found' = the source does not contain it."""
+    text = _plain(source_text)
+    pieces = re.split(r"\[\.\.\.\]|\.\.\.|\u2026", quote)  # the model may join passages with "..."
+    parts = [p for p in (_plain(x) for x in pieces) if len(p) >= 12]
+    if not parts:
+        return "not checked"
+    if all(p in text for p in parts):
+        return "verified"
+
+    def covered(part):  # share of the part's three-word runs that appear in the source
+        words = part.split()
+        runs = [" ".join(words[i:i + 3]) for i in range(max(1, len(words) - 2))]
+        return sum(run in text for run in runs) / len(runs)
+
+    return "close match" if min(covered(p) for p in parts) >= 0.6 else "not found"
+
+
+def check_quotes(report, found):
+    """One result per finding, in the same order as report.subs[i].findings."""
+    sources = {e["n"]: e for f in found for e in f["evidence"]}
+    return [[check_quote(x.quote, sources[x.source]["text"]) if x.source in sources
+             else "not found" for x in sv.findings] for sv in report.subs]
 
 
 # ---------- Step 7: the verdict (Opus) ----------
@@ -381,16 +485,28 @@ def verdict_prompt(claim, sections):
 
 # ---------- The whole run ----------
 
-def run(claim, run_baseline=False, status=lambda msg: None):
-    meter, t0, cache = Meter(), time.time(), {}
+def run(claim, run_baseline=False, status=lambda msg: None, use_memory=True):
+    meter, t0, cache, trace = Meter(), time.time(), {}, []
 
     status("Opus is splitting the claim into sub-hypotheses...")
     subs = split(meter, claim)
+    trace.append({"step": "Split the claim", "done by": "Claude Opus",
+                  "detail": f"{len(subs)} assumptions, {2 * len(subs)} search queries",
+                  "seconds": round(time.time() - t0, 1)})
 
     status("Skimming, scoring and reading for each sub-hypothesis...")
     embed(["warm up"])  # load the embedding model once, before the parallel work starts
     with ThreadPoolExecutor(max_workers=3) as pool:
-        found = list(pool.map(lambda s: investigate(meter, s, cache), subs))
+        found = list(pool.map(lambda s: investigate(meter, s, cache, use_memory), subs))
+    for i, f in enumerate(found, 1):
+        reused = sum(x["memory"] and x["read"] for x in f["rated"])
+        trace.append({"step": f"Assumption {i}: skim, screen, read",
+                      "done by": f"Telem ({', '.join(f['engines']) or 'engines'}), embeddings, "
+                                 f"Claude Haiku, Tavily",
+                      "detail": f"{len(f['rated'])} results screened, {len(f['evidence'])} read"
+                                + (", searched again with new queries" if f["retry"] else "")
+                                + (f", {reused} reused from memory" if reused else ""),
+                      "seconds": round(f["seconds"], 1)})
 
     n = 0  # number the evidence [1], [2], ... across all sub-hypotheses
     for f in found:
@@ -400,7 +516,30 @@ def run(claim, run_baseline=False, status=lambda msg: None):
 
     status("Opus is writing the verdict...")
     smart_prompt = verdict_prompt(claim, [(f["sub"].statement, f["evidence"]) for f in found])
+    t1 = time.time()
     report = ask(meter, "verdict", smart_prompt, Report, model=STRONG, system=VERDICT_SYSTEM)
+    trace.append({"step": "Write the verdict", "done by": "Claude Opus",
+                  "detail": f"from {n} sources", "seconds": round(time.time() - t1, 1)})
+
+    t1 = time.time()
+    checks = check_quotes(report, found)
+    flat = [c for sub_checks in checks for c in sub_checks]
+    trace.append({"step": "Check every quote against its source", "done by": "plain code",
+                  "detail": f"{flat.count('verified')} verified word for word, "
+                            f"{flat.count('close match')} close match, "
+                            f"{flat.count('not found')} not found",
+                  "seconds": round(time.time() - t1, 1)})
+
+    if use_memory:
+        t1 = time.time()
+        try:
+            stored = sum(memory.remember(claim, f["sub"].statement, f["evidence"]) for f in found)
+            trace.append({"step": "Store the evidence", "done by": "Qdrant vector database",
+                          "detail": f"{stored} passages stored, {memory.size()} in memory",
+                          "seconds": round(time.time() - t1, 1)})
+        except Exception as e:
+            trace.append({"step": "Store the evidence", "done by": "Qdrant vector database",
+                          "detail": f"unavailable ({type(e).__name__})", "seconds": 0})
 
     # ----- comparison: what "read everything" would cost for the same job -----
     status("Measuring the read-everything comparison...")
@@ -442,6 +581,7 @@ def run(claim, run_baseline=False, status=lambda msg: None):
     smart_in_cost = sum(c["input"] * PRICES.get(c["model"], PRICES[STRONG])[0] / 1e6
                         for c in meter.calls)
     return {"claim": claim, "found": found, "report": report, "meter": meter,
+            "checks": checks, "trace": trace,
             "seconds": time.time() - t0, "baseline": baseline,
             "smart": {"pages": len({e["url"] for f in found for e in f["evidence"]}),
                       "input_tokens": smart_in, "input_cost": smart_in_cost,

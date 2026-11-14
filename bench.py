@@ -59,7 +59,7 @@ for item in json.load(open("claims.json", encoding="utf-8")):
     print(f"\n=== {claim}  (known answer: {answer})")
     row = {"claim": claim, "answer": answer}
     try:
-        r = run(claim)
+        r = run(claim, use_memory=False)  # memory off, so every claim starts cold
         rep, s, b = r["report"], r["smart"], r["baseline"]
         row.update(tester_verdict=rep.overall_verdict, tester_correct=correct(rep.overall_verdict, answer),
                    tester_confidence=rep.confidence, tester_pages=s["pages"],

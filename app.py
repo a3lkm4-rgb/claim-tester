@@ -11,6 +11,7 @@ load_dotenv()
 
 import streamlit as st  # noqa: E402
 
+import memory  # noqa: E402
 from llm import Meter  # noqa: E402
 from pipeline import extract_claims, run, run_many  # noqa: E402
 
@@ -53,6 +54,8 @@ CSS = """<style>
 .ev a {font-size:.82rem; color:#0B3954;}
 .chip {display:inline-block; font-size:.7rem; padding:.08rem .5rem; border-radius:999px;
        background:#E3E8EE; color:#33475B; margin-left:.35rem;}
+.chip.ok {background:#E3F4E6; color:#1B5E20;} .chip.no {background:#FDE4E4; color:#B71C1C;}
+.chip.near {background:#FFF1D6; color:#8A5300;} .chip.mem {background:#E1F5FE; color:#01579B;}
 .step {font-size:.9rem; color:#33475B;} .step b {color:#0B3954;}
 .assume {font-size:1.05rem; font-weight:600; margin:.1rem 0 .4rem;}
 </style>"""
@@ -62,13 +65,43 @@ def pill(verdict):
     return f'<span class="pill {STYLE[verdict]}">{escape(verdict.upper())}</span>'
 
 
-def evidence_card(finding, sources):
+CHECK = {"verified": '<span class="chip ok">quote verified in source</span>',
+         "close match": '<span class="chip near">close match in source</span>',
+         "not found": '<span class="chip no">quote not found in source</span>'}
+
+
+def evidence_card(finding, sources, check):
     side = "for" if finding.stance == "supports" else "against"
     e = sources.get(finding.source)
     link = (f'<a href="{escape(e["url"], quote=True)}" target="_blank">[{finding.source}] '
             f'{escape(textwrap.shorten(e["title"], 70, placeholder="…"))}</a>'
-            f'<span class="chip">{escape(e["source_type"])}</span>') if e else f"[{finding.source}]"
-    return f'<div class="ev {side}">“{escape(finding.quote)}”<br>{link}</div>'
+            f'<span class="chip">{escape(e["source_type"])}</span>'
+            + ('<span class="chip mem">reused from memory</span>' if e.get("memory") else "")
+            ) if e else f"[{finding.source}]"
+    return (f'<div class="ev {side}">“{escape(finding.quote)}”<br>{link}'
+            f'{CHECK.get(check, "")}</div>')
+
+
+ARCHITECTURE = """digraph {
+rankdir=LR; bgcolor="transparent";
+node [shape=box, style="rounded,filled", fillcolor="#F4F6F8", fontname="Helvetica", fontsize=10,
+      fontcolor="black"];
+edge [color="#888888", fontname="Helvetica", fontsize=9, fontcolor="#555555"];
+claim [label="Claim or memo", fillcolor="#c5cae9"];
+split [label="Split into assumptions\nand for / against queries\n(Claude Opus)"];
+skim [label="Skim: multi-engine search,\nauto-routed (Telem)"];
+dedupe [label="Drop repeats\n(local embedding model)"];
+screen [label="Screen each result: score,\nstance, source type\n(Claude Haiku)"];
+again [label="Evidence thin?\nRewrite the queries\n(Claude Haiku)", fillcolor="#fff3e0"];
+read [label="Read only the relevant\npassages (Tavily extract,\nTelem fetch as backup)"];
+verdict [label="Verdict on each\nassumption (Claude Opus)"];
+check [label="Check every quote\nagainst its source\n(plain code)"];
+out [label="Report, evidence map,\nmemo", fillcolor="#c5cae9"];
+mem [label="Evidence memory\n(Qdrant vector database)", shape=cylinder, fillcolor="#e1f5fe"];
+claim -> split -> skim -> dedupe -> screen -> read -> verdict -> check -> out;
+screen -> again [label="thin"]; again -> skim [label="search again"];
+mem -> dedupe [label="recall"]; read -> mem [label="store"];
+}"""
 
 
 def label(text, width=34, limit=110):
@@ -159,6 +192,9 @@ with st.sidebar:
         st.button(example, on_click=lambda e=example: st.session_state.update(claim=e),
                   width="stretch")
     st.divider()
+    use_memory = st.checkbox("Use evidence memory", value=True, help=(
+        "Passages read in earlier tests are kept in a local vector database. Related ones are "
+        "recalled as candidates, and reused without fetching the page again."))
     run_baseline = st.checkbox("Also run the read-everything version", help=(
         "Slower and costs more. Opens every search result in full and asks for a second "
         "verdict, so you can compare quality."))
@@ -177,7 +213,8 @@ with mode_claim:
         go = button.form_submit_button("Test claim", type="primary", width="stretch")
     if go and claim:
         with st.status("Testing the claim...", expanded=True) as progress:
-            st.session_state["results"] = [run(claim, run_baseline, status=progress.write)]
+            st.session_state["results"] = [run(claim, run_baseline, status=progress.write,
+                                               use_memory=use_memory)]
             save_to_library(st.session_state["results"][0])
             progress.update(label="Done", state="complete", expanded=False)
 
@@ -199,7 +236,7 @@ with mode_memo:
                                 default=[c.claim for c in memo_claims[:3]], max_selections=3)
         if st.button("Test selected claims", type="primary") and picked:
             with st.spinner(f"Testing {len(picked)} claims side by side. About two minutes..."):
-                st.session_state["results"] = run_many(picked)
+                st.session_state["results"] = run_many(picked, use_memory)
             for done in st.session_state["results"]:
                 save_to_library(done)
 
@@ -249,7 +286,8 @@ with st.container(border=True):
     st.download_button("Download memo", memo(r), file_name="hypothesis-test-memo.md")
 
 # ---- headline numbers
-k = st.columns(5)
+checked = [c for sub_checks in r["checks"] for c in sub_checks]
+k = st.columns(6)
 k[0].metric("Sources screened", sum(len(f["rated"]) for f in r["found"]), border=True)
 k[1].metric("Read in full", f"{smart['pages']} of {base['pages']}", border=True,
             help="Pages opened, against the number a read-everything approach would open")
@@ -257,9 +295,12 @@ k[2].metric("Tokens saved", f"{1 - smart['input_tokens'] / base['input_tokens']:
             if base["input_tokens"] else "n/a", border=True)
 k[3].metric("Cost of this test", f"${smart['total_cost']:.2f}", border=True)
 k[4].metric("Time", f"{r['seconds']:.0f} sec", border=True)
+k[5].metric("Quotes verified", f"{checked.count('verified')} of {len(checked)}", border=True,
+            help="Every quoted finding is checked, word for word, against the text of its source")
 
-tab_assume, tab_map, tab_cost, tab_library = st.tabs(
-    ["Key assumptions", "Evidence map", "Cost and method", f"Claim library ({len(library)})"])
+tab_assume, tab_map, tab_cost, tab_hood, tab_library = st.tabs(
+    ["Key assumptions", "Evidence map", "Cost and method", "Under the hood",
+     f"Claim library ({len(library)})"])
 
 # ---- key assumptions
 with tab_assume:
@@ -275,8 +316,9 @@ with tab_assume:
                     (left, "supports", "Evidence for", "None found."),
                     (right, "contradicts", "Evidence against",
                      "We searched for evidence against this and found none.")):
-                items = [x for x in sv.findings if x.stance == stance]
-                cards = "".join(evidence_card(x, sources) for x in items)
+                items = [(x, c) for x, c in zip(sv.findings, r["checks"][i - 1])
+                         if x.stance == stance]
+                cards = "".join(evidence_card(x, sources, c) for x, c in items)
                 col.markdown(f'<div class="eyebrow">{title} ({len(items)})</div>'
                              + (cards or f'<div class="step">{empty}</div>'),
                              unsafe_allow_html=True)
@@ -294,7 +336,11 @@ with tab_assume:
             with st.expander(f"All {len(f['rated'])} sources screened for this assumption"):
                 st.caption(f"Searched for: “{f['sub'].query_for}” and against: "
                            f"“{f['sub'].query_against}”")
-                st.dataframe([{"Read": "yes" if x["read"] else "", "Score": x["score"],
+                if f["retry"]:
+                    st.caption(f"The first results were thin, so it searched again with: "
+                               f"“{f['retry'][0]}” and “{f['retry'][1]}”")
+                st.dataframe([{"Read": ("from memory" if x["memory"] else "yes") if x["read"] else "",
+                               "Score": x["score"],
                                "Stance": x["stance"], "Source type": x["source_type"],
                                "Title": x["title"], "Link": x["url"]} for x in f["rated"]],
                              column_config={"Link": st.column_config.LinkColumn()},
@@ -333,8 +379,34 @@ with tab_cost:
     with st.expander("Audit trail: what was searched, dropped and read"):
         for i, f in enumerate(r["found"], 1):
             st.markdown(f"**Assumption {i}**\n\n" + "\n".join(f["log"]))
-    with st.expander("Every AI call in this test"):
+
+# ---- under the hood
+with tab_hood:
+    st.markdown("#### How a claim moves through the system")
+    st.graphviz_chart(ARCHITECTURE, width="stretch")
+    st.caption("The three assumptions run in parallel. Up to three claims from a memo run in "
+               "parallel as well.")
+    st.markdown("#### What happened in this test")
+    st.dataframe(r["trace"], hide_index=True)
+    left, right = st.columns(2)
+    with left:
+        st.markdown("#### Every AI call")
         st.dataframe(r["meter"].calls, hide_index=True)
+    with right:
+        st.markdown("#### The stack")
+        try:
+            stored = memory.size()
+        except Exception:
+            stored = "unavailable"
+        st.markdown(
+            "- **Telem**: multi-engine search with auto-routing; backup page fetch\n"
+            "- **Tavily**: query-aware extraction of the relevant passages\n"
+            "- **Claude Opus 5.5**: splits the claim, reads memos, writes the verdict\n"
+            "- **Claude Haiku 5.5**: screens every result; rewrites queries when evidence is thin\n"
+            "- **bge-small embedding model** (runs locally): drops repeats, powers memory\n"
+            f"- **Qdrant vector database** (local): evidence memory, {stored} passages stored\n"
+            "- **Quote checker** (plain code): verifies each quote against its source\n"
+            "- **Streamlit**: this page")
 
 # ---- claim library
 with tab_library:

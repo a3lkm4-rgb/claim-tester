@@ -17,18 +17,27 @@ You type a claim. It returns:
 ## How it works
 
 ```
-claim
-  │
-  ▼  Opus          splits the claim into 3 sub-hypotheses, each with a "for" and an "against" query
-  ▼  Telem         searches both queries in one request, auto-routed to the best engines;
-  │                returns titles and short summaries only (the "skim")
-  ▼  embeddings    drop repeated pages and the same story on different sites (local, no tokens)
-  ▼  Haiku         scores every result 0-10 for evidence strength and labels its stance
-  │                (supports / contradicts / neutral) and source type
-  ▼  Tavily        opens only the top 3 per sub-hypothesis, keeping a place for each side,
-  │                and returns only the passages relevant to that sub-hypothesis (the "read")
-  ▼  Opus          writes the verdicts from that small, relevant set
-  ▼  scoreboard    compares the tokens used with opening every result in full
+ claim or memo
+      │
+      ▼  Opus          reads a memo and lists the claims its conclusion depends on (optional)
+      ▼  Opus          splits a claim into 3 assumptions, each with a "for" and an "against" query
+      │
+      │   ┌──────────────── for each assumption, in parallel ────────────────┐
+      ▼   │                                                                  │
+   Qdrant │  recall      passages from earlier tests, close in meaning       │
+   Telem  │  skim        both queries in one request, auto-routed to the     │
+          │              best engines; titles and summaries only             │
+   embed  │  drop        repeated pages and the same story on other sites    │
+   Haiku  │  screen      score 0-10, stance, source type for every result    │
+   Haiku  │  re-search   if fewer than 2 strong results: new queries, once   │
+   Tavily │  read        only the top 3, a place kept for each side; returns │
+          │              only the passages relevant to the assumption        │
+          │              (Telem fetch is the backup if a page will not open) │
+          └──────────────────────────────────────────────────────────────────┘
+      ▼  Opus          writes a verdict on each assumption and overall
+      ▼  code          checks every quoted finding against the text of its source
+      ▼  Qdrant        stores the passages read, for future claims
+      ▼  scoreboard    compares the tokens used with opening every result in full
 ```
 
 Why it is not keyword search or a chatbot on top:
@@ -44,7 +53,18 @@ Why it is not keyword search or a chatbot on top:
 | **Telem** | The skim: one request searches several engines with auto-routing and returns summaries. Calls are tagged so they appear in Telem's dashboard. Also the backup page fetcher. |
 | **Tavily** | The read: query-aware extract returns only the relevant passages of each chosen page. Tavily is also one of the engines Telem routes to. |
 
-Also used: Claude Opus 5.5 (split, verdict), Claude Haiku 5.5 (scoring), fastembed with `bge-small-en-v1.5` (duplicate removal), Streamlit (the page).
+The rest of the stack:
+
+| Part | Role |
+|---|---|
+| **Claude Opus 5.5** | Reads memos, splits claims, writes verdicts. Every answer is returned in a fixed schema |
+| **Claude Haiku 5.5** | Screens every search result; rewrites queries when the evidence is thin |
+| **fastembed, `bge-small-en-v1.5`** | Embedding model that runs locally: duplicate removal and memory, at no token cost |
+| **Qdrant** (local mode) | Vector database holding every passage read, recalled for related claims so a page is never read twice |
+| **Quote checker** | Plain code that verifies each quoted finding appears in its source |
+| **Thread pools** | Three assumptions in parallel; up to three claims from a memo in parallel |
+| **Token meter and test harness** | Every AI call is metered; `bench.py` runs labelled claims against a baseline |
+| **Streamlit** | The page: red-flag report, evidence cards, evidence map, architecture view |
 
 ## Results
 
@@ -87,6 +107,7 @@ Other entry points: `python run_once.py "your claim"` prints a run in the termin
 | `pipeline.py` | The whole process, one function per step |
 | `llm.py` | Claude calls and the token meter |
 | `embed.py` | Local embeddings |
+| `memory.py` | Evidence memory in a local Qdrant vector database |
 | `app.py` | The Streamlit page |
 | `bench.py`, `claims.json` | The true-or-false test |
 | `DECISIONS.md` | The planning log: every idea considered and why |
