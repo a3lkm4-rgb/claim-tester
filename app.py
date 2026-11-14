@@ -83,10 +83,10 @@ def evidence_card(finding, sources, check):
 
 
 ARCHITECTURE = """digraph {
-rankdir=LR; bgcolor="transparent";
-node [shape=box, style="rounded,filled", fillcolor="#F4F6F8", fontname="Helvetica", fontsize=10,
-      fontcolor="black"];
-edge [color="#888888", fontname="Helvetica", fontsize=9, fontcolor="#555555"];
+rankdir=TB; bgcolor="transparent"; nodesep=0.5; ranksep=0.35;
+node [shape=box, style="rounded,filled", fillcolor="#F4F6F8", fontname="Helvetica", fontsize=13,
+      fontcolor="black", margin="0.18,0.1"];
+edge [color="#888888", fontname="Helvetica", fontsize=11, fontcolor="#555555"];
 claim [label="Claim or memo", fillcolor="#c5cae9"];
 split [label="Split into assumptions\nand for / against queries\n(Claude Opus)"];
 skim [label="Skim: multi-engine search,\nauto-routed (Telem)"];
@@ -387,12 +387,15 @@ with tab_cost:
 
 # ---- under the hood
 with tab_hood:
-    st.markdown("#### How a claim moves through the system")
-    st.graphviz_chart(ARCHITECTURE, width="stretch")
-    st.caption("The three assumptions run in parallel. Up to three claims from a memo run in "
-               "parallel as well.")
-    st.markdown("#### What happened in this test")
-    st.dataframe(r["trace"], hide_index=True)
+    diagram, trace = st.columns([2, 3])
+    with diagram:
+        st.markdown("#### How a claim moves through the system")
+        st.graphviz_chart(ARCHITECTURE, width="content")
+        st.caption("The three assumptions run in parallel. Up to three claims from a memo run "
+                   "in parallel as well.")
+    with trace:
+        st.markdown("#### What happened in this test")
+        st.dataframe(r["trace"], hide_index=True)
     left, right = st.columns(2)
     with left:
         st.markdown("#### Every AI call")
