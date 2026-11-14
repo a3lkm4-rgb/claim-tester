@@ -1,0 +1,7 @@
+claim,answer,tester_verdict,tester_correct,tester_confidence,tester_pages,tester_tokens,tester_cost,tester_seconds,everything_pages,everything_tokens,everything_reading_cost,tester_reading_cost,chatbot_verdict,chatbot_correct,chatbot_pages,chatbot_tokens,chatbot_cost,chatbot_seconds
+Amazon Web Services is the largest cloud infrastructure provider by market share,true,supported,True,high,9,26699,0.1404,68,30,233314,0.9333,0.0567,supported,True,5,56521,0.2306,24
+Nvidia's data center business generates most of its revenue,true,supported,True,high,9,31581,0.1608,73,30,444014,1.7761,0.0668,not enough evidence,False,4,16512,0.0757,67
+Netflix has grown its paid subscriber base since launching its ad-supported plan in 2022,true,supported,True,high,9,38721,0.1399,77,30,285517,1.1421,0.0576,supported,True,5,69651,0.2878,10
+WeWork has never filed for bankruptcy,false,not supported,True,high,9,33823,0.1438,79,30,202219,0.8089,0.0604,not supported,True,5,5799,0.0289,21
+Peloton's revenue has grown every year since 2021,false,not supported,True,high,9,56770,0.1699,61,30,863828,3.4553,0.1187,not supported,True,5,18544,0.082,11
+US office vacancy rates have fallen since the shift to remote work,false,partly supported,False,medium,9,32000,0.1486,73,29,234025,0.9361,0.0649,partly supported,False,5,14980,0.0717,12

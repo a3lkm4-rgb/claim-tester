@@ -1,0 +1,134 @@
+[
+  {
+    "claim": "Amazon Web Services is the largest cloud infrastructure provider by market share",
+    "answer": "true",
+    "verdict": "supported",
+    "confidence": "high",
+    "summary": "Yes. On a global basis, AWS is the largest cloud infrastructure provider in every independent measure provided: Synergy ranks it #1 at 26% of cloud infrastructure services in Q3 2026, and Gartner ranks it #1 in IaaS at 37.7% for 2024. Two caveats matter. Its share is eroding steadily as Microsoft, Google and neoclouds grow faster, and its leadership is not universal by region, since Gartner data show Alibaba leading IaaS in Asia Pacific and Chinese Mainland.",
+    "sharper_claim": "AWS is the largest cloud infrastructure provider worldwide: 26% of cloud infrastructure services spending in Q3 2026 (Synergy) and 37.7% of IaaS in 2024 (Gartner). Its share is steadily eroding as Microsoft, Google and neoclouds grow faster, and it is not the leader in Asia Pacific or Chinese Mainland, where Alibaba ranks first.",
+    "subs": [
+      {
+        "statement": "Independent analyst firms (e.g., Synergy, Canalys, Gartner, IDC) currently rank AWS #1 in cloud infrastructure (IaaS/PaaS) market share",
+        "verdict": "supported"
+      },
+      {
+        "statement": "AWS's cloud infrastructure revenue exceeds that of its nearest competitors (Microsoft Azure, Google Cloud, Alibaba Cloud) on a comparable basis",
+        "verdict": "supported"
+      },
+      {
+        "statement": "AWS's lead holds under alternative definitions and regions of the cloud infrastructure market (e.g., IaaS-only, including or excluding China), rather than being an artifact of one measurement",
+        "verdict": "partly supported"
+      }
+    ]
+  },
+  {
+    "claim": "Nvidia's data center business generates most of its revenue",
+    "answer": "true",
+    "verdict": "supported",
+    "confidence": "high",
+    "summary": "Yes. Data Center is by far Nvidia's largest revenue source. Official figures put it at about 88% of FY2025 revenue ($115.2B of $130.5B), an independent compilation from 10-Ks puts it at 89.7% of FY2026 revenue, and it was 87.9%\u201392.5% of revenue in each of the five quarters through Q2 FY2027. One qualification: 'Data Center' is a market platform, not a GAAP reportable segment. Its share is also based on Nvidia's own classification, which no source independently audits.",
+    "sharper_claim": "Nvidia's Data Center market platform, mainly AI compute and networking, accounted for about 88% of revenue in FY2025 and about 90% in FY2026. Its share rose every quarter from 87.9% (Q2 FY2026) to 92.5% (Q2 FY2027), and the GAAP Compute & Networking segment shows a similar share.",
+    "subs": [
+      {
+        "statement": "In Nvidia's most recent fiscal year, the data center segment accounted for more than 50% of total reported revenue",
+        "verdict": "supported"
+      },
+      {
+        "statement": "Data center has been the majority of revenue in recent quarterly reports too, so the annual figure is not driven by a single unusual quarter",
+        "verdict": "supported"
+      },
+      {
+        "statement": "Nvidia's reported 'data center' segment revenue mainly reflects actual data center products (GPUs, networking, systems) rather than reclassified revenue from other businesses",
+        "verdict": "supported"
+      }
+    ]
+  },
+  {
+    "claim": "Netflix has grown its paid subscriber base since launching its ad-supported plan in 2022",
+    "answer": "true",
+    "verdict": "supported",
+    "confidence": "high",
+    "summary": "Yes. Netflix's paid memberships rose from about 230.7M at end-2022, weeks after the November 2022 ad-tier launch, to 301.63M at end-2024. That is roughly 71M more, or about 31%, under a consistently defined paid-membership metric in its audited filings. What the sources do not settle is how much of that growth the ad tier caused, and they do not let us track the count after Q4 2024, when Netflix stopped quarterly reporting.",
+    "sharper_claim": "Netflix's audited paid memberships, which exclude free trials and Extra Member sub-accounts, rose from about 230.7M at end-2022 to 301.63M at end-2024, a gain of about 71M (~31%) in the two years after the ad-tier launch. The ad plan became a major sign-up channel (over 50% of sign-ups in ads countries by Q3'24), but how much of the net growth it caused, rather than shifting existing members down, is unresolved.",
+    "subs": [
+      {
+        "statement": "Netflix's total global paid memberships reported after November 2022 are higher than the count reported just before the ad tier launched (Q3 2022, ~223 million).",
+        "verdict": "supported"
+      },
+      {
+        "statement": "Netflix's subscriber disclosures after 2022 remain a consistent, comparable paid-subscriber metric, not inflated by redefinitions or free accounts. Netflix stopped quarterly subscriber reporting in 2025, so this is a real risk.",
+        "verdict": "partly supported"
+      },
+      {
+        "statement": "The ad-supported plan's sign-ups represent net additions of paying members rather than mostly being offset by churn or downgrades from existing paid plans.",
+        "verdict": "contested"
+      }
+    ]
+  },
+  {
+    "claim": "WeWork has never filed for bankruptcy",
+    "answer": "false",
+    "verdict": "not supported",
+    "confidence": "high",
+    "summary": "The claim is false. WeWork Inc. and hundreds of affiliates filed voluntary Chapter 11 petitions in the US Bankruptcy Court for the District of New Jersey on November 6, 2023, and emerged under a confirmed plan effective June 11, 2024. A related recognition proceeding under Canada's CCAA covered its Canadian entities. The SEC filing, the court docket and the debtors' own court filings all agree, and no source contradicts them.",
+    "sharper_claim": "WeWork Inc. and more than 500 affiliates filed for Chapter 11 in New Jersey on November 6, 2023, alongside related Canadian CCAA recognition proceedings, and emerged with a confirmed plan effective June 11, 2024. Some earlier restructurings, such as the March 2023 SoftBank and noteholder transaction support agreement, were done out of court.",
+    "subs": [
+      {
+        "statement": "WeWork Inc. (the US parent company) has never filed a Chapter 11 or Chapter 7 petition in any US bankruptcy court.",
+        "verdict": "not supported"
+      },
+      {
+        "statement": "No WeWork subsidiary or affiliate outside the US has entered a formal insolvency proceeding, such as Canadian CCAA protection or UK administration.",
+        "verdict": "not supported"
+      },
+      {
+        "statement": "WeWork's major restructurings, including its 2019 IPO collapse, SoftBank rescue, and 2024 ownership change, were done out of court rather than through a court-supervised bankruptcy process.",
+        "verdict": "partly supported"
+      }
+    ]
+  },
+  {
+    "claim": "Peloton's revenue has grown every year since 2021",
+    "answer": "false",
+    "verdict": "not supported",
+    "confidence": "high",
+    "summary": "The claim is false. Peloton's total revenue has fallen in every fiscal year since its FY2021 peak of $4,021.8M: to $3,582.1M in FY2022, $2,800.2M in FY2023, about $2,700.5M in FY2024, and about $2,491M in FY2025. Third-party data also shows a further decline to about $2,446M in FY2026. SEC filings and independent aggregators agree, and no source contradicts the decline.",
+    "sharper_claim": "Peloton's total revenue has declined every fiscal year since its FY2021 peak of $4.02B, reaching about $2.49B in FY2025 per independent data. Subscription revenue grew through FY2023 (to $1.67B) and roughly held at about $1.67\u20131.71B through FY2026.",
+    "subs": [
+      {
+        "statement": "Peloton's fiscal 2022 total revenue exceeded its fiscal 2021 total revenue.",
+        "verdict": "not supported"
+      },
+      {
+        "statement": "Peloton's fiscal 2023 total revenue exceeded its fiscal 2022 total revenue.",
+        "verdict": "not supported"
+      },
+      {
+        "statement": "Peloton's total revenue in fiscal 2024 and fiscal 2025 each exceeded the prior fiscal year's total revenue.",
+        "verdict": "not supported"
+      }
+    ]
+  },
+  {
+    "claim": "US office vacancy rates have fallen since the shift to remote work",
+    "answer": "false",
+    "verdict": "partly supported",
+    "confidence": "medium",
+    "summary": "Read literally, the claim is wrong: US office vacancy is still well above where it was when remote work began. Moody's puts the start-of-pandemic rate at 17%, and recent readings range from 18.4% (Yardi, Dec 2025) to 19.8% (Cushman & Wakefield and Newmark, Q3 2026). What the evidence does support is a modest decline from a post-pandemic peak reached between 2024 and 2025, helped by both positive absorption and the removal of office stock.",
+    "sharper_claim": "US office vacancy peaked at roughly 20% in 2024\u2013early 2025 and has since edged down by roughly 0.3\u20131.5 points, depending on the data provider. The decline reflects modestly positive net absorption combined with a thin construction pipeline and conversions/demolitions. Vacancy remains above its pre-pandemic level of about 17%.",
+    "subs": [
+      {
+        "statement": "National US office vacancy rates are currently lower than their peak level reached after the 2020 shift to remote work (i.e., a sustained downward trend exists in recent data from sources like Moody's, CBRE, Cushman & Wakefield).",
+        "verdict": "supported"
+      },
+      {
+        "statement": "Current US office vacancy rates are below pre-pandemic (2019) levels, meaning vacancy has fallen relative to before remote work began.",
+        "verdict": "not supported"
+      },
+      {
+        "statement": "Any recent decline in vacancy is driven by rising office demand (positive net absorption, return-to-office mandates, leasing growth) rather than solely by supply removal such as office conversions and demolitions.",
+        "verdict": "partly supported"
+      }
+    ]
+  }
+]

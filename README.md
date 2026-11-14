@@ -50,7 +50,23 @@ Also used: Claude Opus 5.5 (split, verdict), Claude Haiku 5.5 (scoring), fastemb
 
 See [results.csv](results.csv) and [bench_results.json](bench_results.json) for the true-or-false test: six claims with known answers, run through Hypothesis Tester and through a plain "search + chatbot" baseline.
 
-<!-- RESULTS -->
+| Claim | Known answer | Hypothesis Tester | Search + chatbot |
+|---|---|---|---|
+| AWS is the largest cloud infrastructure provider by market share | True | Supported ✓ | Supported ✓ |
+| Nvidia's data center business generates most of its revenue | True | Supported ✓ | Not enough evidence ✗ |
+| Netflix has grown its paid subscribers since its 2022 ad-supported plan | True | Supported ✓ | Supported ✓ |
+| WeWork has never filed for bankruptcy | False | Not supported ✓ | Not supported ✓ |
+| Peloton's revenue has grown every year since 2021 | False | Not supported ✓ | Not supported ✓ |
+| US office vacancy rates have fallen since the shift to remote work | False | Partly supported ✗ | Partly supported ✗ |
+| **Correct** | | **5 of 6** | **4 of 6** |
+
+Measured on 14 November 2026, one run per claim:
+
+- **Against reading everything:** opening every search result in full would have used 10 times the tokens. Hypothesis Tester used 90% fewer tokens and 95% less reading cost.
+- **Cost and time:** $0.15 and 72 seconds per claim on average.
+- **Against the chatbot baseline:** the chatbot reads only 5 pages, so it is quicker and slightly cheaper overall ($0.78 against $0.91 for the six claims). It was also less accurate, and it gives one answer with no evidence against.
+
+Caveats: six claims is a small sample. The one miss by both tools is an ambiguously worded claim: vacancy rose overall after 2020, but has edged down from its peak, so "partly supported" is defensible.
 
 ## Run it
 
