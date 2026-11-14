@@ -1,0 +1,8 @@
+telem-sdk
+tavily-python
+anthropic
+streamlit
+pydantic
+python-dotenv
+fastembed
+numpy
