@@ -1,5 +1,6 @@
 """The page.  Run:  streamlit run app.py"""
 import json
+import os
 import textwrap
 from datetime import date
 from html import escape
@@ -10,6 +11,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import streamlit as st  # noqa: E402
+
+# When hosted on Streamlit Cloud, the API keys come from its Secrets box instead of a .env file.
+try:
+    for _name, _value in st.secrets.items():
+        if isinstance(_value, str):
+            os.environ.setdefault(_name, _value)
+except Exception:
+    pass  # no secrets file: running locally with .env
 
 import memory  # noqa: E402
 from llm import Meter  # noqa: E402
@@ -174,6 +183,18 @@ def save_to_library(r):
 
 st.set_page_config(page_title="Claim Tester", layout="wide")
 st.markdown(CSS, unsafe_allow_html=True)
+
+# Optional access code, so a public link cannot be used to spend the API credit.
+# It is only asked for when APP_PASSWORD is set (in .env or in Streamlit's Secrets box).
+if os.getenv("APP_PASSWORD") and not st.session_state.get("unlocked"):
+    st.markdown('<p class="brand">Claim Tester</p>', unsafe_allow_html=True)
+    entered = st.text_input("Access code", type="password")
+    if entered == os.getenv("APP_PASSWORD"):
+        st.session_state["unlocked"] = True
+        st.rerun()
+    if entered:
+        st.error("That code is not right.")
+    st.stop()
 
 with st.sidebar:
     st.markdown("### How it works")

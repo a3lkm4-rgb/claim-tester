@@ -4,3 +4,5 @@ __pycache__/
 .models/
 library.json
 evidence_db/
+HANDOFF.md
+.streamlit/secrets.toml
