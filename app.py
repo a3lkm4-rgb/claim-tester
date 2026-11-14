@@ -11,11 +11,22 @@ load_dotenv()
 
 import streamlit as st  # noqa: E402
 
-from pipeline import run  # noqa: E402
+from llm import Meter  # noqa: E402
+from pipeline import extract_claims, run, run_many  # noqa: E402
 
 EXAMPLES = ["Notion is losing small-business customers",
             "Duolingo is losing users because of its AI-first strategy",
             "US office vacancy rates have fallen since the shift to remote work"]
+
+SAMPLE_MEMO = """SAMPLE MEMO (fictional, for demonstration)
+
+Recommendation: take a minority stake in Peloton Interactive.
+
+Peloton is a recovering growth story. Its revenue has grown every year since 2021, and the company has returned to consistent profitability. Its connected-fitness subscribers churn at under 2% a month, which is low for a consumer subscription. Peloton remains the largest connected-fitness brand in the US by subscribers. Meanwhile, demand for at-home fitness equipment is still rising after the pandemic. We recommend proceeding to confirmatory diligence."""
+
+# what each verdict means for a memo that relies on the claim
+FLAG = {"not supported": "Red flag", "contested": "Disputed", "partly supported": "Partly holds",
+        "supported": "Holds", "not enough evidence": "No evidence found"}
 
 # verdict or stance -> badge style and map colour
 STYLE = {"supported": "good", "partly supported": "warn", "contested": "warn",
@@ -156,20 +167,57 @@ st.markdown('<p class="brand">Hypothesis Tester</p>'
             '<p class="tagline">Pressure-test a business claim: evidence for and against, '
             'reading only what matters.</p>', unsafe_allow_html=True)
 
-with st.form("test", border=False):
-    box, button = st.columns([6, 1], vertical_alignment="bottom")
-    claim = box.text_input("Claim to test", key="claim",
-                           placeholder="e.g. Notion is losing small-business customers")
-    go = button.form_submit_button("Test claim", type="primary", width="stretch")
+mode_claim, mode_memo = st.tabs(["Test a claim", "Start from a memo"])
 
-if go and claim:
-    with st.status("Testing the claim...", expanded=True) as progress:
-        st.session_state["result"] = run(claim, run_baseline, status=progress.write)
-        save_to_library(st.session_state["result"])
-        progress.update(label="Done", state="complete", expanded=False)
+with mode_claim:
+    with st.form("test", border=False):
+        box, button = st.columns([6, 1], vertical_alignment="bottom")
+        claim = box.text_input("Claim to test", key="claim",
+                               placeholder="e.g. Notion is losing small-business customers")
+        go = button.form_submit_button("Test claim", type="primary", width="stretch")
+    if go and claim:
+        with st.status("Testing the claim...", expanded=True) as progress:
+            st.session_state["results"] = [run(claim, run_baseline, status=progress.write)]
+            save_to_library(st.session_state["results"][0])
+            progress.update(label="Done", state="complete", expanded=False)
 
-r = st.session_state.get("result")
+with mode_memo:
+    st.caption("Paste an investment memo, a strategy paper or a slide's text. The tool lists the "
+               "claims its conclusion depends on, then tests the ones you choose.")
+    st.button("Load a sample memo", on_click=lambda: st.session_state.update(memo=SAMPLE_MEMO))
+    memo_text = st.text_area("Memo", key="memo", height=200, label_visibility="collapsed",
+                             placeholder="Paste the memo text here")
+    if st.button("Find the claims to test") and memo_text:
+        with st.spinner("Reading the memo..."):
+            st.session_state["memo_claims"] = extract_claims(Meter(), memo_text)
+    memo_claims = st.session_state.get("memo_claims")
+    if memo_claims:
+        st.dataframe([{"Claim": c.claim, "Importance": c.importance, "Why it matters": c.why,
+                       "From the memo": c.quote} for c in memo_claims], hide_index=True)
+        picked = st.multiselect("Claims to test (up to 3 at a time)",
+                                [c.claim for c in memo_claims],
+                                default=[c.claim for c in memo_claims[:3]], max_selections=3)
+        if st.button("Test selected claims", type="primary") and picked:
+            with st.spinner(f"Testing {len(picked)} claims side by side. About two minutes..."):
+                st.session_state["results"] = run_many(picked)
+            for done in st.session_state["results"]:
+                save_to_library(done)
+
+results = st.session_state.get("results", [])
 library = load_library()
+r = results[0] if results else None
+
+if len(results) > 1:
+    with st.container(border=True):
+        st.markdown('<div class="eyebrow">Red-flag report</div>', unsafe_allow_html=True)
+        for x in results:
+            v = x["report"].overall_verdict
+            st.markdown(f'{pill(v)} <b style="margin-left:.5rem">{FLAG[v]}:</b> '
+                        f'{escape(x["claim"])} <span class="conf">confidence: '
+                        f'{x["report"].confidence}</span>', unsafe_allow_html=True)
+        shown = st.selectbox("Show the detail for", range(len(results)),
+                             format_func=lambda i: results[i]["claim"])
+        r = results[shown]
 
 if not r:
     st.info("Enter a claim above, or pick an example from the sidebar. A test takes about a minute.")

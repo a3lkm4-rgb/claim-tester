@@ -78,6 +78,42 @@ def split(meter, claim):
     return ask(meter, "split", SPLIT_PROMPT.format(claim=claim), Plan, model=STRONG).subs[:3]
 
 
+# ---------- Optional first step: pull the testable claims out of a memo (Opus) ----------
+
+class MemoClaim(BaseModel):
+    claim: str    # rewritten as one standalone, testable statement
+    quote: str    # the passage in the memo it comes from
+    importance: Literal["high", "medium", "low"]  # how much the memo's conclusion rests on it
+    why: str      # one line: why it matters to the conclusion
+
+
+class MemoClaims(BaseModel):
+    claims: list[MemoClaim]
+
+
+MEMO_PROMPT = """You are a diligence analyst reviewing a memo before it goes to an investment
+or steering committee. List the factual claims that the memo's conclusion depends on and that
+could be checked against public web evidence.
+
+Rewrite each as one standalone statement that names the company or market, so it makes sense
+without the memo. Skip opinions, internal figures nobody outside could check, and forecasts.
+Give at most 8, ordered from the claim the conclusion depends on most to least.
+
+Memo:
+{memo}"""
+
+
+def extract_claims(meter, memo):
+    return ask(meter, "memo", MEMO_PROMPT.format(memo=memo), MemoClaims, model=STRONG).claims[:8]
+
+
+def run_many(claims):
+    """Test several claims side by side. Returns results in the same order."""
+    embed(["warm up"])  # load the embedding model once, before the parallel work starts
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        return list(pool.map(run, claims))
+
+
 # ---------- Step 2: skim (Telem searches several engines, both sides in one request) ----------
 
 def skim(sub):
