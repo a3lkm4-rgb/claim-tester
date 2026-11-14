@@ -599,7 +599,7 @@ def run(claim, run_baseline=False, status=lambda msg: None, use_memory=True):
 
     baseline = {"pages": m, "input_tokens": split_tokens + base_tokens, "how": how,
                 "input_cost": (split_tokens + base_tokens) * PRICES[STRONG][0] / 1e6,
-                "report": None, "sources": [e for _, items in sections for e in items]}
+                "report": None}  # the full page texts are not kept: they are large
     if run_baseline:
         status("Running the read-everything version for a quality comparison...")
         base_meter = Meter()
